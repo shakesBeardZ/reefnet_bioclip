@@ -36,9 +36,12 @@ from ..training.scheduler import cosine_lr, const_lr, const_lr_cooldown
 from ..training.train import train_one_epoch, evaluate
 from ..training.file_utils import pt_load, check_exists, start_sync_process, remote_sync
 
+from ..training.data import DataInfo
+from ..training.reefnet_dataset import FineTuneDataset
+from torch.utils.data.distributed import DistributedSampler
+from torch.utils.data import DataLoader
 
 LATEST_CHECKPOINT_NAME = "epoch_latest.pt"
-
 
 def random_seed(seed=42, rank=0):
     torch.manual_seed(seed + rank)
@@ -103,10 +106,12 @@ def main(args):
         ])
 
     resume_latest = args.resume == 'latest'
+    args.logs = args.logs_dir if args.logs_dir is not None else args.logs
     log_base_path = os.path.join(args.logs, args.name)
     args.log_path = None
     if is_master(args, local=args.log_local):
         os.makedirs(log_base_path, exist_ok=True)
+        print(f"Logs and checkpoints will be saved at {log_base_path}")
         log_filename = f'out-{args.rank}' if args.log_local else 'out.log'
         args.log_path = os.path.join(log_base_path, log_filename)
         if os.path.exists(args.log_path) and not resume_latest:
@@ -220,7 +225,8 @@ def main(args):
         args.force_image_size = args.force_image_size[0]
     random_seed(args.seed, 0)
     model, preprocess_train, preprocess_val = create_model_and_transforms(
-        args.model,
+        # args.model,
+        'hf-hub:imageomics/bioclip',
         args.pretrained,
         precision=args.precision,
         device=device,
@@ -337,8 +343,59 @@ def main(args):
             model.load_state_dict(checkpoint)
             logging.info(f"=> loaded checkpoint '{args.resume}' (epoch {start_epoch})")
 
+    train_dataset = FineTuneDataset(
+        root_dir=args.root_dir,
+        csv_file=args.csv_file,
+        column_name=args.column_name,
+        transform=preprocess_train,
+        split='train',
+        debug_loader=args.debug_loader,
+        patch_type=args.patch_type
+    )
+
+    train_sampler = DistributedSampler(train_dataset)
+    train_dataloader = DataLoader(
+        train_dataset, 
+        batch_size=args.batch_size, 
+        num_workers=args.workers, 
+        pin_memory=True,
+        sampler=train_sampler,
+        drop_last=False,
+    )
+    
+    train_num_samples = len(train_dataset)
+    train_dataloader.num_samples = train_num_samples
+    train_dataloader.num_batches = len(train_dataloader)
+
+    val_dataset = FineTuneDataset(
+        root_dir=args.root_dir,
+        csv_file=args.csv_file,
+        column_name=args.column_name,
+        transform=preprocess_val,
+        split='val',
+        debug_loader=args.debug_loader,
+        patch_type=args.patch_type
+    )
+    val_sampler = None
+    val_dataloader = DataLoader(
+        val_dataset,
+        batch_size=args.batch_size,
+        shuffle=False,
+        num_workers=args.workers,
+        pin_memory=True,
+        sampler=val_sampler,
+        drop_last=False,
+    )
+    val_num_samples = len(val_dataset)
+    val_dataloader.num_samples = val_num_samples
+    val_dataloader.num_batches = len(val_dataloader)
+    data = {
+        'train': DataInfo(train_dataloader, train_sampler), 
+        'val':  DataInfo(val_dataloader, val_sampler)
+    }
+
     # initialize datasets
-    data = get_data(args, (preprocess_train, preprocess_val), epoch=start_epoch, tokenizer=get_tokenizer(args.model))
+    # data = get_data(args, (preprocess_train, preprocess_val), epoch=start_epoch, tokenizer=get_tokenizer(args.model))
     assert len(data), 'At least one train or eval dataset must be specified.'
 
     # create scheduler if train

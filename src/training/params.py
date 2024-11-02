@@ -431,7 +431,53 @@ def parse_args(args):
         default='taxon',
         help="Text type of annotation for text encoder.",
     )
+    
+    # args added by Yahia for fine-tuning
+    parser.add_argument(
+        "--root_dir",
+        type=str,
+        default='/ibex/project/c2253/CoralNet_Images/',
+        help="Root directory of the dataset.",
+    )
+
+    parser.add_argument(
+        "--csv_file",
+        type=str,
+        default='annotations_with_aphiaid_and_taxonomy.csv',
+        help="CSV file containing annotations.",
+    )
+
+    parser.add_argument(
+        "--column_name",
+        type=str,
+        default='taxon',
+        help="Column name for annotations.",
+    )
+
+    parser.add_argument(
+        "--debug_loader",
+        action="store_true",
+        default=False,
+        help="Whether to use the debug loader.",
+    )
+
+    parser.add_argument(
+        "--patch_type",
+        type=str,
+        default='224',
+        help="whether to use 512 or 224 as patch size",
+    )
+    
+    parser.add_argument(
+        "--logs-dir",
+        type=str,
+        default="./storage/model",
+        help="Where to store tensorboard logs. Use None to avoid storing logs.",
+    )
+
     args = parser.parse_args(args)
+    
+
 
     # If some params are not passed, we use the default values based on model name.
     default_params = get_default_params(args.model)

@@ -135,14 +135,14 @@ def to_classes(data,text_type):
     data_view = data.drop(columns=list(set(data.keys()) - set(Taxon.__dict__.keys())))
 
     if text_type == 'sci':
-        return data_view.apply(lambda x: Taxon(**x.to_dict()).scientific_name, axis=1).values.tolist()
+        return data_view.apply(lambda x: Taxon(**x.to_dict()).scientific_name.strip(), axis=1).values.tolist()
     elif text_type == 'taxon':
-        return data_view.apply(lambda x: Taxon(**x.to_dict()).taxonomic_name, axis=1).values.tolist()
+        return data_view.apply(lambda x: Taxon(**x.to_dict()).taxonomic_name.strip(), axis=1).values.tolist()
     elif text_type == 'com':
-        return data_view.apply(lambda x: Taxon(**x.to_dict()).get_common_name, axis=1).values.tolist()
+        return data_view.apply(lambda x: Taxon(**x.to_dict()).get_common_name.strip(), axis=1).values.tolist()
     elif text_type == 'sci_com':
-        return data_view.apply(lambda x: Taxon(**x.to_dict()).sci_common_name, axis=1)
+        return data_view.apply(lambda x: Taxon(**x.to_dict()).sci_common_name.strip(), axis=1)
     elif text_type == 'taxon_com':
-        return data_view.apply(lambda x: Taxon(**x.to_dict()).taxon_common_name, axis=1)
+        return data_view.apply(lambda x: Taxon(**x.to_dict()).taxon_common_name.strip(), axis=1)
     else:
         raise ValueError("text type is not acceptable.")
